@@ -1,0 +1,267 @@
+<html>
+  <head>
+    <script src="https://aframe.io/releases/0.7.0/aframe.min.js"></script>
+    <script src="https://cdn.rawgit.com/donmccurdy/aframe-extras/v3.13.1/dist/aframe-extras.min.js"></script>
+</head>
+  <body>
+    <script>
+    document.addEventListener("DOMContentLoaded", function(event) {
+      AFRAME.registerComponent('turret', {
+        init: function () {
+          var turret = this.el,
+              light = turret.querySelector('a-light'),
+              scene = document.querySelector('a-scene'),
+              speed = 20,
+              target = {
+                x: 0,
+                y: 0,
+                z: 0
+              },
+              // We need to keep track of which keys are being pressed so we
+              // know if a key is still down when a different key is released.
+              pressed = {
+                up: false,
+                down: false,
+                left: false,
+                right: false,
+                space: false
+              },
+              beamLoading = false,
+              rotateTween = new TWEEN.Tween();
+
+          window.addEventListener('keydown', function(e) {
+            // Listen for direction keydown (up, down, left, right)
+            if (isDirectionKey(e.code)) {
+              TWEEN.remove(rotateTween);
+
+              setTarget(e.code);
+              setPressed(e.code,true);
+
+              var rotation = {
+                  x:THREE.Math.radToDeg(turret.object3D.rotation.x),
+                  y:THREE.Math.radToDeg(turret.object3D.rotation.y),
+                  z:0
+                },
+                xDegreesDelta = Math.abs(target.x - rotation.x),
+                yDegreesDelta = Math.abs(target.y - rotation.y),
+                duration = ((xDegreesDelta + yDegreesDelta) / 2) / speed * 1000;
+
+              rotateTween = new TWEEN.Tween(rotation)
+                .to(target, duration)
+                .easing(TWEEN.Easing.Linear.None)
+                .onUpdate(function(d){
+                  turret.setAttribute('rotation',rotation)
+                })
+                .start();
+            }
+
+            // Listen for spacebar keydown
+            if ('Space' == e.code && ! beamLoading) {
+              beamLoading = true;
+              setPressed(e.code,true);
+
+              var beam = document.createElement("a-box"),
+                  releasedBeam = document.createElement("a-box"),
+                  scale = {x:1, y:0, z:0},
+                  position = {x:0, y:0.2, z:-3.5},
+                  intensity = light.getAttribute('intensity'),
+                  loadDuration = 500,
+                  distanceDuration = 2000;
+
+              beam.setAttribute('depth',4);
+              beam.setAttribute('height',0.15);
+              beam.setAttribute('width',0.25);
+              beam.setAttribute('color','#00FFFF');
+              beam.setAttribute('class','beam');
+              beam.setAttribute('position',position);
+              beam.setAttribute('scale',scale);
+
+              releasedBeam.setAttribute('depth',4);
+              releasedBeam.setAttribute('height',0.15);
+              releasedBeam.setAttribute('width',0.25);
+              releasedBeam.setAttribute('color','#00FFFF');
+              releasedBeam.setAttribute('class','beam');
+              releasedBeam.setAttribute('visible','false');
+
+              turret.appendChild(beam);
+              scene.appendChild(releasedBeam);
+              beam.appendChild(light);
+
+              // Grow beam scale
+              new TWEEN.Tween(scale)
+                .to({x:1, y:1, z:1}, loadDuration)
+                .onUpdate(function(d){
+                  beam.setAttribute('scale',scale)
+                })
+                .start();
+
+              // Move beam slightly forward while it grows
+              new TWEEN.Tween(position)
+                .to({x:0, y:0.2, z:-5.5}, loadDuration)
+                .onUpdate(function(d){
+                  beam.setAttribute('position',position)
+                })
+                .onComplete(function(){
+
+                  fireBeam.start();
+                  beamLoading = false;
+
+                  if (pressed.space) {
+                    var e = new KeyboardEvent('keydown',{code:'Space',bubbles:true});
+                    document.dispatchEvent(e);
+                  }
+                })
+                .start();
+
+              // Increase light intensity as beam grows
+              new TWEEN.Tween(intensity)
+                .to(0.5, loadDuration)
+                .onUpdate(function(d){
+                  light.setAttribute('intensity', d * 0.5)
+                })
+                .start();
+
+              // Shoot beam into the distance
+              var fireBeam = new TWEEN.Tween(0)
+                .to(1, distanceDuration)
+                .onStart(function() {
+                  var matrixPosition = new THREE.Vector3().setFromMatrixPosition(beam.object3D.matrixWorld),
+                      releasePosition = {x:matrixPosition.x, y:matrixPosition.y, z:matrixPosition.z},
+                      releaseRotation = turret.getAttribute('rotation');
+
+                  releasedBeam.setAttribute('position',releasePosition);
+                  releasedBeam.setAttribute('rotation',releaseRotation);
+                  releasedBeam.setAttribute('visible','true');
+                  beam.setAttribute('visible','false');
+                })
+                .onUpdate(function(d){
+                  releasedBeam.object3D.translateZ(-20 * d);
+                  releasedBeam.setAttribute('position',releasedBeam.object3D.position);
+                  releasedBeam.setAttribute('scale', {x:1, y:1, z:1+(d*5)});
+                })
+                .onComplete(function(){
+                  beam.parentNode.removeChild(beam);
+                  releasedBeam.parentNode.removeChild(releasedBeam);
+                });
+            }
+          });
+
+          window.addEventListener('keyup', function(e) {
+            // Listen for direction keyup (up, down, left, right)
+            if (isDirectionKey(e.code)) {
+              TWEEN.remove(rotateTween);
+
+              setPressed(e.code,false);
+
+              target = {
+                x:THREE.Math.radToDeg(turret.object3D.rotation.x),
+                y:THREE.Math.radToDeg(turret.object3D.rotation.y),
+                z:0
+              };
+            }
+
+            // Return to previous direction if the key is still down
+            if (pressed.up) {
+              var e = new KeyboardEvent('keydown',{code:'ArrowUp',bubbles:true});
+              document.dispatchEvent(e);
+            }
+            if (pressed.down) {
+              var e = new KeyboardEvent('keydown',{code:'ArrowDown',bubbles:true});
+              document.dispatchEvent(e);
+            }
+            if (pressed.left) {
+              var e = new KeyboardEvent('keydown',{code:'ArrowLeft',bubbles:true});
+              document.dispatchEvent(e);
+            }
+            if (pressed.right) {
+              var e = new KeyboardEvent('keydown',{code:'ArrowRight',bubbles:true});
+              document.dispatchEvent(e);
+            }
+
+            // Listen for spacebar keyup
+            if ('Space' == e.code) {
+              setPressed(e.code,false);
+            }
+          });
+
+          function isDirectionKey(keyCode) {
+            var keyCodes = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
+            if (-1 !== keyCodes.indexOf(keyCode)) {
+              return true;
+            }
+            return false;
+          }
+
+          function setTarget(keyCode) {
+            if ('ArrowUp' == keyCode) {
+              target.x = 35;
+            }
+            if ('ArrowDown' == keyCode) {
+              target.x = -25;
+            }
+            if ('ArrowLeft' == keyCode) {
+              target.y = 45;
+            }
+            if ('ArrowRight' == keyCode) {
+              target.y = -45;
+            }
+          }
+
+          function setPressed(keyCode,isPressed) {
+            if ('ArrowUp' == keyCode) {
+              pressed.up = isPressed;
+            }
+            if ('ArrowDown' == keyCode) {
+              pressed.down = isPressed;
+            }
+            if ('ArrowLeft' == keyCode) {
+              pressed.left = isPressed;
+            }
+            if ('ArrowRight' == keyCode) {
+              pressed.right = isPressed;
+            }
+            if ('Space' == keyCode) {
+              pressed.space = isPressed;
+            }
+          }
+        }
+      });
+    });
+    </script>
+    </div>
+    <a-scene>
+      <!-- Assets -->
+      <a-assets>
+        <img id="sky" src="images/sky.jpg">
+        <a-asset-item id="planet-model" src="models/planet/scene.gltf"></a-asset-item>
+        <a-asset-item id="turret-model" src="models/turret/scene.gltf"></a-asset-item>
+      </a-assets>
+
+      <!-- Planet -->
+      <a-entity id="planet" position="0 0 1500" gltf-model="#planet-model" scale="100 100 100">
+        <a-animation attribute="rotation" to="0 360 0" dur="500000" easing="linear" repeat="indefinite"></a-animation>
+      </a-entity>
+
+      <!-- Turret -->
+      <a-entity id="turret" position="0 -1 0" rotation="0 0 0" depth="3" height="3" width="3" turret>
+        <a-entity position="0 -3 0.5" rotation="0 180 0" scale="0.3 0.3 0.3" gltf-model="#turret-model"></a-entity>
+        <!--
+        This light could have been generated every time the space bar is pressed, as a child of the beam,
+        but it's too resource intensive, especially when moving it from the loading beam to the fired beam.
+        -->
+        <a-light type="spot" position="0 1 0" angle="180" intensity="0" color="#00FFFF" target=".beam"></a-light>
+      </a-entity>
+
+      <!-- Lighting -->
+      <a-light type="directional" intensity="1" position="-1 1 0" target="#planet"></a-light>
+      <a-light type="directional" intensity="0.25" position="0 0.5 1" target="#turret" color="#fb6348"></a-light>
+      <a-light type="ambient" intensity="0.1"></a-light>
+
+      <!-- Environment -->
+      <a-sky src="#sky"></a-sky>
+
+      <!-- Camera / Cursor -->
+      <a-camera wasd-controls-enabled="false" userHeight="0"></a-camera>
+    </a-scene>
+  </body>
+</html>
