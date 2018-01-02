@@ -5,6 +5,8 @@
 Arrow keys to move the turret, space to shoot.
 
 ## To-do
+
+- [ ] Sounds
 - [ ] Add controller support for moving and firing the turret
 - [ ] Add enemy spacecraft, flying toward the planet for you to shoot at
 - [ ] Add collision between beam and enemies
