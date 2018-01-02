@@ -2,7 +2,7 @@
 
 [Open](https://lukecarbis.github.io/planet-defence)
 
-Arrow keys to move the turret, space to shoot.
+Arrow keys to move the turret, space to shoot. Save the planet (it's behind you).
 
 ## To-do
 
